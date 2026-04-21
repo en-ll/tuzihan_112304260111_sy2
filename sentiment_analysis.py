@@ -29,6 +29,10 @@ def preprocess_text(text):
     # 处理否定词
     text = re.sub(r"n't", ' not', text)
     text = re.sub(r"can't", 'cannot', text)
+    text = re.sub(r"won't", 'will not', text)
+    text = re.sub(r"don't", 'do not', text)
+    # 处理重复字符（如"aaaa"变为"aa"）
+    text = re.sub(r'(.)\1{2,}', r'\1\1', text)
     # 移除标点符号和数字
     text = re.sub(r'[^a-zA-Z\s]', '', text)
     # 分词
@@ -73,24 +77,85 @@ def get_weighted_embedding(model, words):
     else:
         return np.zeros(model.vector_size)
 
+# 计算文档的其他统计特征嵌入
+def get_statistical_embeddings(model, words):
+    embeddings = []
+    for word in words:
+        if word in model.wv:
+            embeddings.append(model.wv[word])
+    
+    if embeddings:
+        embeddings = np.array(embeddings)
+        # 计算最大值、最小值、标准差
+        max_emb = np.max(embeddings, axis=0)
+        min_emb = np.min(embeddings, axis=0)
+        std_emb = np.std(embeddings, axis=0)
+        return np.concatenate([max_emb, min_emb, std_emb])
+    else:
+        return np.zeros(model.vector_size * 3)
+
 # 提取额外特征
 def extract_additional_features(text):
-    # 文本长度
-    text_length = len(text.split())
+    # 基本特征
+    text_lower = text.lower()
+    words = text_lower.split()
+    text_length = len(words)
+    
     # 情感词计数
-    positive_words = set(['good', 'great', 'excellent', 'amazing', 'wonderful', 'fantastic', 'superb', 'awesome', 'perfect', 'best'])
-    negative_words = set(['bad', 'terrible', 'awful', 'horrible', 'poor', 'worst', 'disappointing', 'horrendous', 'dreadful', 'pathetic'])
-    words = text.lower().split()
+    positive_words = set(['good', 'great', 'excellent', 'amazing', 'wonderful', 'fantastic', 'superb', 'awesome', 'perfect', 'best',
+                         'love', 'like', 'enjoy', 'brilliant', 'outstanding', 'exceptional', 'terrific', 'fabulous', 'incredible', 'marvelous'])
+    negative_words = set(['bad', 'terrible', 'awful', 'horrible', 'poor', 'worst', 'disappointing', 'horrendous', 'dreadful', 'pathetic',
+                         'hate', 'dislike', 'disgusting', 'frustrating', 'annoying', 'boring', 'tedious', 'dull', 'monotonous', 'depressing'])
+    
     positive_count = sum(1 for word in words if word in positive_words)
     negative_count = sum(1 for word in words if word in negative_words)
+    
     # 否定词计数
-    negation_words = set(['not', 'no', 'never', 'none', 'nobody', 'nothing', 'nowhere', 'hardly', 'scarcely', 'barely', 'seldom'])
+    negation_words = set(['not', 'no', 'never', 'none', 'nobody', 'nothing', 'nowhere', 'hardly', 'scarcely', 'barely', 'seldom', "n't"])
     negation_count = sum(1 for word in words if word in negation_words)
-    return [text_length, positive_count, negative_count, negation_count]
+    
+    # 单词多样性（不同单词的比例）
+    word_diversity = len(set(words)) / text_length if text_length > 0 else 0
+    
+    # 情感强度（情感词比例）
+    sentiment_intensity = (positive_count + negative_count) / text_length if text_length > 0 else 0
+    
+    # 否定词比例
+    negation_ratio = negation_count / text_length if text_length > 0 else 0
+    
+    # 正面情感比例
+    positive_ratio = positive_count / text_length if text_length > 0 else 0
+    
+    # 负面情感比例
+    negative_ratio = negative_count / text_length if text_length > 0 else 0
+    
+    # 情感词位置（靠前的情感词影响更大）
+    positive_position = 0
+    negative_position = 0
+    for i, word in enumerate(words):
+        if word in positive_words and positive_position == 0:
+            positive_position = (i + 1) / text_length if text_length > 0 else 0
+        if word in negative_words and negative_position == 0:
+            negative_position = (i + 1) / text_length if text_length > 0 else 0
+    
+    # 感叹号和问号数量
+    exclamation_count = text.count('!')
+    question_count = text.count('?')
+    
+    # 大写字母比例（通常表示强调）
+    uppercase_count = sum(1 for c in text if c.isupper())
+    uppercase_ratio = uppercase_count / len(text) if len(text) > 0 else 0
+    
+    # 情感得分（考虑否定词的影响）
+    sentiment_score = (positive_count - negative_count) / text_length if text_length > 0 else 0
+    if negation_count > 0:
+        sentiment_score = -sentiment_score
+    
+    return [text_length, positive_count, negative_count, negation_count, word_diversity, sentiment_intensity, negation_ratio, positive_ratio, negative_ratio, positive_position, negative_position, exclamation_count, question_count, uppercase_ratio, sentiment_score]
 
 # 读取训练数据
 print("Reading training data...")
-train_df = pd.read_csv('labeledTrainData.tsv', sep='\t', low_memory=True, nrows=15000)  # 增加训练数据量
+train_df = pd.read_csv('labeledTrainData.tsv', sep='\t', low_memory=True, nrows=15000)  # 减少训练数据量以加快训练速度
 
 # 预处理训练数据
 print("Preprocessing training data...")
@@ -101,23 +166,24 @@ train_df['additional_features'] = train_df['review'].apply(extract_additional_fe
 print("Training Word2Vec model...")
 model = Word2Vec(
     train_df['processed_review'], 
-    vector_size=150,  # 增加向量大小
-    window=7,  # 增加窗口大小
-    min_count=2,  # 增加最小词频
-    workers=4,
-    sg=1,  # 使用skip-gram模型
-    epochs=10  # 增加训练轮数
+    vector_size=150,  # 保持向量大小以平衡性能和速度
+    window=7,  # 保持窗口大小以平衡性能和速度
+    min_count=2,  # 保持最小词频
+    workers=2,  # 保持工作线程数
+    sg=0,  # 使用CBOW模型，训练速度更快
+    epochs=8  # 减少训练轮数以加快训练速度
 )
 
 # 计算训练数据的嵌入
 print("Calculating embeddings for training data...")
 train_mean_embeddings = np.array([get_mean_embedding(model, words) for words in train_df['processed_review']])
 train_weighted_embeddings = np.array([get_weighted_embedding(model, words) for words in train_df['processed_review']])
+train_stat_embeddings = np.array([get_statistical_embeddings(model, words) for words in train_df['processed_review']])
 
 # 合并特征
 print("Merging features...")
 train_additional_features = np.array(train_df['additional_features'].tolist())
-train_features = np.hstack([train_mean_embeddings, train_weighted_embeddings, train_additional_features])
+train_features = np.hstack([train_mean_embeddings, train_weighted_embeddings, train_stat_embeddings, train_additional_features])
 
 # 标准化特征
 print("Standardizing features...")
@@ -128,8 +194,8 @@ train_labels = train_df['sentiment']
 # 网格搜索优化逻辑回归参数
 print("Optimizing logistic regression parameters...")
 param_grid = {
-    'C': [0.1, 1, 10, 100],
-    'penalty': ['l1', 'l2'],
+    'C': [0.1, 1, 10],
+    'penalty': ['l2'],
     'solver': ['liblinear']
 }
 grid_search = GridSearchCV(
@@ -137,7 +203,7 @@ grid_search = GridSearchCV(
     param_grid,
     cv=5,
     scoring='roc_auc',
-    n_jobs=-1
+    n_jobs=1  # 使用单线程以减少内存使用
 )
 grid_search.fit(train_features, train_labels)
 
@@ -161,11 +227,12 @@ test_df['additional_features'] = test_df['review'].apply(extract_additional_feat
 print("Calculating embeddings for test data...")
 test_mean_embeddings = np.array([get_mean_embedding(model, words) for words in test_df['processed_review']])
 test_weighted_embeddings = np.array([get_weighted_embedding(model, words) for words in test_df['processed_review']])
+test_stat_embeddings = np.array([get_statistical_embeddings(model, words) for words in test_df['processed_review']])
 
 # 合并特征
 print("Merging features...")
 test_additional_features = np.array(test_df['additional_features'].tolist())
-test_features = np.hstack([test_mean_embeddings, test_weighted_embeddings, test_additional_features])
+test_features = np.hstack([test_mean_embeddings, test_weighted_embeddings, test_stat_embeddings, test_additional_features])
 
 # 标准化测试特征
 print("Standardizing test features...")
