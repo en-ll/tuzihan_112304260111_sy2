@@ -126,11 +126,13 @@
 
 **我的项目结构：**
 ```text
-project/
-├─ data/
-├─ src/
-├─ notebooks/
-├─ images/
-├─ submission/
-└─ README.md
+f:\Trae\sy2\
+├─ sentiment_analysis.py   # 主要代码文件，实现情感分析功能
+├─ README.md               # 实验报告
+├─ requirements.txt        # Python依赖
+├─ .env.example            # 环境变量模板
+├─ .env                    # 本地环境变量文件（不上传）
+├─ .gitignore              # Git忽略文件配置
+├─ submission.csv          # 生成的提交文件
+└─ submission.zip          # 压缩的提交文件
 ```
