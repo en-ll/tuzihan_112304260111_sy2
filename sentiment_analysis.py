@@ -2,6 +2,8 @@ import pandas as pd
 import re
 import numpy as np
 from sklearn.linear_model import LogisticRegression, LinearRegression
+from sklearn.ensemble import RandomForestClassifier, VotingClassifier
+from sklearn.svm import SVC
 from sklearn.model_selection import train_test_split, GridSearchCV
 from sklearn.metrics import accuracy_score, roc_auc_score
 from sklearn.preprocessing import StandardScaler
@@ -49,7 +51,7 @@ def preprocess_text(text):
 def get_tfidf_vectorizer():
     return TfidfVectorizer(
         ngram_range=(1, 2),  # 启用短语模式，包括1-gram和2-gram
-        max_features=3000,  # 减少特征数量以加快训练速度
+        max_features=2000,  # 减少特征数量以加快训练速度
         stop_words='english',  # 使用内置停用词列表
         min_df=2,  # 最小文档频率
         max_df=0.95  # 最大文档频率
@@ -162,6 +164,7 @@ print(f"Best cross-validation score: {grid_search.best_score_}")
 # 训练最佳模型
 print("Training best model...")
 best_classifier = grid_search.best_estimator_
+best_classifier.fit(train_features, train_labels)
 
 # 读取测试数据
 print("Reading test data...")

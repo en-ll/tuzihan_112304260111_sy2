@@ -157,5 +157,9 @@ f:\Trae\sy2\
 ├─ .gitignore              # Git忽略文件配置
 ├─ submission.csv          # 生成的提交文件
 └─ submission.zip          # 压缩的提交文件
+<<<<<<< HEAD
 ```
 
+=======
+```
+>>>>>>> a679c2a271f72be21f88095a25987bfe2eb90869
