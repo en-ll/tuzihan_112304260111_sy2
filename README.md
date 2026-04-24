@@ -50,7 +50,7 @@
 
 请在下方插入 Kaggle 提交结果截图，要求能清楚看到分数信息。
 
-![Kaggle截图](./images/kaggle_score.png)
+![Kaggle截图](./112304260111_屠子涵_kaggle_score.png)
 
 > 建议将截图保存在 `images` 文件夹中。\
 > 截图文件名示例：`2023123456_张三_kaggle_score.png`
@@ -90,11 +90,22 @@
 
 **我的做法：**
 
-1. 使用TF-IDF的短语模式，ngram\_range=(1, 2)，包括1-gram和2-gram
-2. 最大特征数量：3000
-3. 最小文档频率：2
-4. 最大文档频率：0.95
-5. 使用内置停用词列表
+1. 使用了词级 TF-IDF 特征：
+   - ngram_range=(1, 3)，包括1-gram、2-gram和3-gram
+   - 最大特征数量：50000
+   - 最小文档频率：2
+   - 最大文档频率：0.85
+   - 使用内置停用词列表
+   - sublinear_tf=True
+
+2. 使用了字符级 TF-IDF 特征：
+   - analyzer='char'
+   - ngram_range=(2, 6)
+   - 最大特征数量：50000
+   - 最小文档频率：2
+   - sublinear_tf=True
+
+3. 融合了词级和字符级特征，总特征数约100000
 
 ***
 

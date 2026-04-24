@@ -2,3 +2,5 @@ pandas
 numpy
 gensim
 scikit-learn
+beautifulsoup4
+lxml
